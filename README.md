@@ -4,4 +4,7 @@ Written in ruby
 
 ## TODO
 
-Document how to host your own
+- Use config file loading?
+- Document how to host your own
+- Handle CWs
+- Handle long toots
