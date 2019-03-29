@@ -2,9 +2,21 @@
 
 Written in ruby
 
+## Quickstart
+
+Install dependencies
+
+`$ bundle install`
+
+Copy the example config and edit it to have your tokens for Twitter and Mastodon
+
+`$ cp example.yml config.yml`
+
+Run the script!
+
+`$ bundle ruby main.rb`
+
 ## TODO
 
-- Use config file loading?
-- Document how to host your own
 - Handle CWs
 - Handle long toots
