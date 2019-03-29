@@ -20,15 +20,32 @@ rest = Mastodon::REST::Client.new(bearer_token: mastodon_token,
                                   base_url: mastodon_url)
 mastodon_user = rest.verify_credentials.acct
 
+def should_thread? post
+  last_posts[:masto] == post.id
+end
+
+last_posts = { masto: '', twit: '' }
+
 Masto.user do |post|
   next unless post.kind_of? Mastodon::Status
   next unless post.account.acct == mastodon_user
   next unless post.visibility =~ /public|unlisted/
 
-  twit_client.update(post.content
-                       .gsub(/<\/p><p>/, "\n")
-                       .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, '')
-                       .gsub('&gt;', '>')
-                       .gsub('&lt;', '<')
-                       .gsub('&apos;', '\''))
+  tweet = nil
+  content = post.content
+              .gsub(/<\/p><p>/, "\n")
+              .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, '')
+              .gsub('&gt;', '>')
+              .gsub('&lt;', '<')
+              .gsub('&apos;', '\'')
+  
+  if should_thread? post
+    tweet = twit_client.update(content,
+                               in_reply_to_status_id: last_posts[:twit])
+  else
+    tweet = twit_client.update(content)
+  end
+  
+  last_posts[:masto] = post.id
+  last_posts[:twit] = tweet.id
 end
