@@ -20,3 +20,7 @@ Run the script!
 
 `$ bundle ruby main.rb`
 
+## TODO
+
+- add way to specify a filter for crossposting
+- specify privacy level for mastodon posts
