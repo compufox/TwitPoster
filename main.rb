@@ -20,11 +20,35 @@ rest = Mastodon::REST::Client.new(bearer_token: mastodon_token,
                                   base_url: mastodon_url)
 mastodon_user = rest.verify_credentials.acct
 
-def should_thread? post
-  last_posts[:masto] == post.id
+def too_long? post
+  content.length > 270
 end
 
-last_posts = { masto: '', twit: '' }
+def should_thread? post
+  last_post[:masto] == post.id
+end
+
+def make_post(content, options = {})
+  twit_client.update(content,
+                     in_reply_to_status_id: options[:reply_id])
+end
+
+def trim_post content
+  line = ''
+  counter = 1
+  words = content.split
+
+  # we break before 280 just in case we go over
+  while too_long? line
+    line += " #{words[counter]}"
+    counter += 1
+  end
+
+  return line.strip, words.join(' ')
+end
+    
+
+last_post = { masto: '', twit: '' }
 
 Masto.user do |post|
   next unless post.kind_of? Mastodon::Status
@@ -38,14 +62,17 @@ Masto.user do |post|
               .gsub('&gt;', '>')
               .gsub('&lt;', '<')
               .gsub('&apos;', '\'')
-  
-  if should_thread? post
-    tweet = twit_client.update(content,
-                               in_reply_to_status_id: last_posts[:twit])
-  else
-    tweet = twit_client.update(content)
+
+  loop do
+    trimmed, content = trim_post content
+
+    tweet = make_post(trimmed, reply_id: last_post[:twit])
+      
+    last_post[:masto] = post.id
+    last_post[:twit] = tweet.id
+
+    break if content.empty?
   end
-  
-  last_posts[:masto] = post.id
-  last_posts[:twit] = tweet.id
+
+  last_post[:twit] = nil
 end
