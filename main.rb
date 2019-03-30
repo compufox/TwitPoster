@@ -62,7 +62,10 @@ Masto.user do |post|
               .gsub('&gt;', '>')
               .gsub('&lt;', '<')
               .gsub('&apos;', '\'')
+  content = "cw: #{post.spoiler_text}
 
+  #{content}"
+  
   loop do
     trimmed, content = trim_post content
 
