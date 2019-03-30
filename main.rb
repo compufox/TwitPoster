@@ -3,6 +3,7 @@ require 'moostodon'
 require 'twitter'
 
 app_conf = YAML.load(ARGV.first || 'config.yml')
+last_post = { masto: '', twit: '' }
 
 twit_client = Twitter::REST::Client.new do |config|
   config.consumer_key = app_conf[:twitter_consumer_key]
@@ -25,7 +26,7 @@ def too_long? post
 end
 
 def should_thread? post
-  last_post[:masto] == post.id
+  last_post[:twit] if last_post[:masto] == post.in_reply_to_id
 end
 
 def make_post(content, options = {})
@@ -46,9 +47,7 @@ def trim_post content
 
   return line.strip, words.join(' ')
 end
-    
 
-last_post = { masto: '', twit: '' }
 
 Masto.user do |post|
   next unless post.kind_of? Mastodon::Status
@@ -62,6 +61,7 @@ Masto.user do |post|
               .gsub('&gt;', '>')
               .gsub('&lt;', '<')
               .gsub('&apos;', '\'')
+
   content = "cw: #{post.spoiler_text}
 
   #{content}"
@@ -69,6 +69,8 @@ Masto.user do |post|
   loop do
     trimmed, content = trim_post content
 
+    last_post[:twit] = should_thread?(post)
+    
     tweet = make_post(trimmed, reply_id: last_post[:twit])
       
     last_post[:masto] = post.id
@@ -76,6 +78,4 @@ Masto.user do |post|
 
     break if content.empty?
   end
-
-  last_post[:twit] = nil
 end

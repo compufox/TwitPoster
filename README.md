@@ -1,6 +1,10 @@
 # A Mastodon to Twitter crossposter
 
-Written in ruby
+## Features
+
+- automatically adds content warnings from mastodon posts
+- creates a twitter thread when it detects a mastodon thread
+- splits up long post from mastodon into a twitter thread
 
 ## Quickstart
 
@@ -16,7 +20,3 @@ Run the script!
 
 `$ bundle ruby main.rb`
 
-## TODO
-
-- Handle CWs
-- Handle long toots
