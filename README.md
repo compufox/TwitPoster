@@ -20,5 +20,5 @@ Copy the example config and edit it to have your tokens for Twitter and Mastodon
 
 Run the script!
 
-`$ bundle ruby main.rb`
+`$ bundle exec ruby main.rb`
 
