@@ -62,13 +62,13 @@ Masto.user do |post|
               .gsub('&gt;', '>')
               .gsub('&lt;', '<')
               .gsub('&apos;', '\'')
-
-  next if content =~ filter
   
   content = "cw: #{post.spoiler_text}
 
   #{content}" if not post.spoiler_text.empty?
 
+  next if content =~ filter
+  
   $last_post[:twit] = should_thread?(post)
   
   loop do
