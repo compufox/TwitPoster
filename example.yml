@@ -1,7 +1,0 @@
----
-:twitter_consumer_key: '1234567890'
-:twitter_consumer_secret: shhhSecret123
-:twitter_access_token: tokenTokenTOKEN
-:twitter_token_secret: tokensSECRET
-:mastodon_url: https://mastodon.social
-:mastodon_token: accessingMastodon

@@ -1,0 +1,24 @@
+---
+:twitter_consumer_key: aLiteralconsumerKey
+:twitter_consumer_secret: shhhSecret123
+:twitter_access_token: tokenTokenTOKEN
+:twitter_token_secret: tokensSECRET
+:mastodon_url: https://mastodon.social
+:mastodon_token: accessingMastodon
+
+# add words underneath here (as shown) to filter posts
+# e.g. '- word1' will not crosspost any mastodon post containing 'word1'
+:filter:
+#- word1
+#- word2
+#- word3
+
+# this value can be any of the following:
+#  public, unlisted, private, direct
+#
+# it will only crosspost posts that have the privacy
+#  level indicated, or higher.
+#
+# e.g. 'unlisted' will crosspost 'public' and 'unlisted'
+#      'private' will crosspost 'public', 'unlisted', and 'private'
+:privacy_level: public
