@@ -54,6 +54,7 @@ Masto.user do |post|
   next unless post.kind_of? Mastodon::Status
   next unless post.account.acct == mastodon_user
   next unless post.visibility =~ privacy
+  next unless post.attributes['reblog'].nil?
   next if not post.mentions.size.zero?
 
   content = post.content
@@ -62,6 +63,7 @@ Masto.user do |post|
               .gsub('&gt;', '>')
               .gsub('&lt;', '<')
               .gsub('&apos;', '\'')
+              .gsub('&quot;', '"')
   
   content = "cw: #{post.spoiler_text}
 
