@@ -2,6 +2,7 @@ require 'yaml'
 require 'moostodon'
 require 'twitter'
 require 'htmlentities'
+require 'net/http'
 
 Levels = ['public', 'unlisted', 'private', 'direct']
 Decoder = HTMLEntities.new
@@ -38,6 +39,18 @@ def should_thread? post
   $last_post[:twit] if $last_post[:masto] == post.in_reply_to_id
 end
 
+# downloads all media attachments from a mastodon post
+# @param post [Mastodon::Status]
+# @return [Array<String>]
+def download_media post
+  files = []
+  post.media_attchments.each_with_index do |i, img|
+    files << "#{i}#{File.extname(img.url)}"
+    File.write(files[i], Net::HTTP.get(img.url))
+  end
+  files
+end
+
 def trim_post content
   line = ''
   counter = 1
@@ -70,12 +83,21 @@ Masto.user do |post|
   next if content =~ filter
   
   $last_post[:twit] = should_thread?(post)
-  
+
+  uploaded_media = false
   while not content.empty?
     trimmed, content = trim_post content
-    
-    tweet = twit_client.update(trimmed,
-                               in_reply_to_status_id: $last_post[:twit])
+
+    if post.media_attchments.size.zero? and not uploaded_media
+      tweet = twit_client.update(trimmed,
+                                 in_reply_to_status_id: $last_post[:twit])
+    else
+      media = download_media post
+      tweet = twit_client.update_with_media(trimmed,
+                                            media,
+                                            in_reply_to_status_id: $last_post[:twit])
+      uploaded_media = true
+    end
       
     $last_post[:masto] = post.id
     $last_post[:twit] = tweet.id
