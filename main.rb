@@ -1,8 +1,10 @@
 require 'yaml'
 require 'moostodon'
 require 'twitter'
+require 'htmlentities'
 
 Levels = ['public', 'unlisted', 'private', 'direct']
+Decoder = HTMLEntities.new
 filter = /[^\w\W]/
 
 app_conf = YAML.load(File.read(ARGV.first || 'config.yml'))
@@ -57,13 +59,9 @@ Masto.user do |post|
   next unless post.attributes['reblog'].nil?
   next if not post.mentions.size.zero?
 
-  content = post.content
-              .gsub(/<\/p><p>/, "\n")
-              .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, '')
-              .gsub('&gt;', '>')
-              .gsub('&lt;', '<')
-              .gsub('&apos;', '\'')
-              .gsub('&quot;', '"')
+  content = Decoder.decode(post.content
+                             .gsub(/<\/p><p>/, "\n")
+                             .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, ''))
   
   content = "cw: #{post.spoiler_text}
 
