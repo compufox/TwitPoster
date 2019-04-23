@@ -45,7 +45,7 @@ end
 def download_media post
   files = []
   post.media_attachments.each_with_index do |img, i|
-    files << "#{i}#{File.extname(img.url)}"
+    files << "#{i}#{File.extname(img.url).split('?').first}"
     File.write(files[i], Net::HTTP.get(URI.parse(img.url)))
   end
   files
@@ -96,6 +96,10 @@ Masto.user do |post|
       tweet = twit_client.update_with_media(trimmed,
                                             media,
                                             in_reply_to_status_id: $last_post[:twit])
+
+      media.each do |file|
+        File.delete(file)
+      end
       uploaded_media = true
     end
       
