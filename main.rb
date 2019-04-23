@@ -44,9 +44,9 @@ end
 # @return [Array<String>]
 def download_media post
   files = []
-  post.media_attchments.each_with_index do |i, img|
+  post.media_attachments.each_with_index do |img, i|
     files << "#{i}#{File.extname(img.url)}"
-    File.write(files[i], Net::HTTP.get(img.url))
+    File.write(files[i], Net::HTTP.get(URI.parse(img.url)))
   end
   files
 end
@@ -88,7 +88,7 @@ Masto.user do |post|
   while not content.empty?
     trimmed, content = trim_post content
 
-    if post.media_attchments.size.zero? and not uploaded_media
+    if post.media_attachments.size.zero? and not uploaded_media
       tweet = twit_client.update(trimmed,
                                  in_reply_to_status_id: $last_post[:twit])
     else
