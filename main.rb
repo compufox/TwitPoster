@@ -60,7 +60,7 @@ Masto.user do |post|
   next if not post.mentions.size.zero?
 
   content = Decoder.decode(post.content
-                             .gsub(/<\/p><p>/, "\n")
+                             .gsub(/(<\/p><p>|^<br\s*\/?>$)/, "\n")
                              .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, ''))
   
   content = "cw: #{post.spoiler_text}
@@ -71,7 +71,7 @@ Masto.user do |post|
   
   $last_post[:twit] = should_thread?(post)
   
-  loop do
+  while not content.empty?
     trimmed, content = trim_post content
     
     tweet = twit_client.update(trimmed,
@@ -79,7 +79,5 @@ Masto.user do |post|
       
     $last_post[:masto] = post.id
     $last_post[:twit] = tweet.id
-    
-    break if content.empty?
   end
 end
