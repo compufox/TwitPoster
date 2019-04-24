@@ -8,6 +8,7 @@ require 'net/http'
 class CrossPoster
   Levels = ['public', 'unlisted', 'private', 'direct']
   Decoder = HTMLEntities.new
+  MaxRetries = 10
 
   attr :filter,
        :privacy,
@@ -20,7 +21,7 @@ class CrossPoster
     raise 'No config file found' unless File.exists?(ARGV.first || 'config.yml')
     app_conf = YAML.load_file(ARGV.first || 'config.yml')
     
-    @filter = /^$/
+    @filter = nil
     @filter = /(#{app_conf[:filter].join('|')})/ if not app_conf[:filter].nil?
 
     level  = Levels.index(app_conf[:privacy_level]) || 0
@@ -112,49 +113,54 @@ class CrossPoster
           next unless post.visibility =~ @privacy
           next unless post.attributes['reblog'].nil?
           next if not post.mentions.size.zero?
-          next if post.content =~ @filter
           
           content = Decoder.decode(post.content
                                      .gsub(/(<\/p><p>|<br\s*\/?>)/, "\n")
                                      .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, ''))
+
+          next if not @filter.nil? and content =~ @filter
+          next if content.empty? and post.media_attachments.size.zero?
           
           content = "cw: #{post.spoiler_text}\n\n#{content}" if not post.spoiler_text.empty?
           
-          # this shouldn't ever hit, but you know. just in case :shrug:
-          next if content.empty? and post.media_attachments.size.zero?
-          
           uploaded_media = false
 
-          # should we put this in a loop?
-          begin
-            while not content.empty?
-              trimmed, content = trim_post content
-              
-              if post.media_attachments.size.zero? and not uploaded_media
-                tweet = @twitter.update(trimmed,
-                                        in_reply_to_status_id: @ids[post.in_reply_to_id])
-              else
-                media = download_media post
-                tweet = @twitter.update_with_media(trimmed,
-                                                   media,
-                                                   in_reply_to_status_id: @ids[post.in_reply_to_id])
-                
-                media.each do |file|
-                  File.delete(file)
-                end
-                uploaded_media = true
-              end
-              
-              @ids[post.id] = tweet.id
-              cull_old_ids
-              save_ids
-            end
+          @retries = 0
+          while not content.empty? or not uploaded_media
+            trimmed, content = trim_post content
             
-          rescue Twitter::Error
+            while @retries < MaxRetries
+              begin
+                if post.media_attachments.size.zero? or uploaded_media
+                  tweet = @twitter.update(trimmed,
+                                          in_reply_to_status_id: @ids[post.in_reply_to_id])
+                else
+                  media = download_media post
+                  tweet = @twitter.update_with_media(trimmed,
+                                                     media,
+                                                     in_reply_to_status_id: @ids[post.in_reply_to_id])
+                  
+                  media.each do |file|
+                    File.delete(file)
+                  end
+                  uploaded_media = true
+                end
+                
+                break
+              rescue Twitter::Error
+                @retries += 1
+              end
+            end
+
+            break if @retries >= MaxRetries
+            
+            @ids[post.id] = tweet.id
+            cull_old_ids
+            save_ids
           end
         end
         
-      rescue Mastodon::Error
+      rescue
       end
     end
   end
