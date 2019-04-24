@@ -32,6 +32,7 @@ class CrossPoster
     @max_ids = app_conf[:max_ids] || 200
     
     @ids = (File.exists?('id_store.yml') ? YAML.load_file('id_store.yml') : {})
+    @ids = {} if @ids.nil?
 
     # set up the twitter client
     @twitter = Twitter::REST::Client.new do |config|
@@ -63,7 +64,7 @@ class CrossPoster
   # @param content [String]
   # @return [Boolean]
   def too_long? content
-    content.length > 270
+    content.length > 250
   end
   
   # downloads all media attachments from a mastodon post
@@ -103,7 +104,7 @@ class CrossPoster
     counter = 1
     words = content.split(/ /)
     
-    # we break before 280 just in case we go over
+    # we break before 280 (@250) just in case we go over
     while not words.empty? and not too_long?(line)
       line += " #{words.shift}"
     end
@@ -116,8 +117,8 @@ class CrossPoster
   def crosspost toot
     content = Decoder.decode(toot.content
                                .gsub(/(<\/p><p>|<br\s*\/?>)/, "\n")
-                               .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, '')
-                               .gsub(/@.+?(@.+?)?\s/, ''))
+                               .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, ''))
+    toot.mentions.each {|ment| content.gsub!("@#{ment.acct}", '')} if !toot.mentions.size.zero?
     
     return if not @filter.nil? and content =~ @filter
     return if content.empty? and toot.media_attachments.size.zero?
@@ -127,12 +128,15 @@ class CrossPoster
     uploaded_media = false
     
     @retries = 0
-    while not content.empty? or not uploaded_media
-      trimmed, content = trim_post content
+    while not content.empty? or
+         (not toot.media_attachments.size.zero? and not uploaded_media)
+      trimmed, content = trim_post(content)
+      tweet = nil
       
-      while @retries < MaxRetries
+      while @retries < MaxRetries and tweet.nil?
         begin
           if toot.media_attachments.size.zero? or uploaded_media
+            
             tweet = @twitter.update(trimmed,
                                     in_reply_to_status_id: @ids[toot.in_reply_to_id])
           else
@@ -146,16 +150,18 @@ class CrossPoster
             end
             uploaded_media = true
           end
-          
-          break
-        rescue Twitter::Error
+        rescue Twitter::Error => err
           @retries += 1
+          pp err
+        rescue StandardError => err
+          pp err
         end
       end
       
-      break if @retries >= MaxRetries
-      
-      @ids[toot.id] = tweet.id
+      break if @retries >= MaxRetries or tweet.nil?
+
+      @ids[toot.in_reply_to_id] = tweet.id if toot.in_reply_to_id
+      @ids[toot.id] = tweet.id 
       cull_old_ids
       save_ids
     end
@@ -178,17 +184,18 @@ class CrossPoster
             next unless post.account.acct == @masto_user.acct
             next unless post.visibility =~ @privacy
             next unless post.mentions.size.zero? or
-              post.attributes['in_reply_to_account_id'] == @masto_user.id
-            
+              post.in_reply_to_account_id == @masto_user.id
+
             if post.attributes['reblog'].nil?
               crosspost post
-            elsif post.attributes['reblog']['account']['acct'] == @masto_user.acct and
-                 @ids.has_key?(post.attributes['reblog']['id'])
-              @twitter.retweet @ids[post.attributes['reblog']['id']]
+            elsif post.reblog.account.acct == @masto_user.acct and
+                 @ids.has_key?(post.reblog.id)
+              @twitter.retweet @ids[post.reblog.id]
             end
           end
         end
-      rescue
+      rescue StandardError => err
+        pp err
       end
     end
   end
