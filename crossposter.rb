@@ -47,8 +47,8 @@ class CrossPoster
     # use the mastodon rest client to get some data about our user
     rest = Mastodon::REST::Client.new(bearer_token: mastodon_token,
                                       base_url: mastodon_url)
-    # get our account's name
-    @masto_user = rest.verify_credentials.acct
+    # get our authed account
+    @masto_user = rest.verify_credentials
 
     # make sure we have the correct url for the streaming interface
     streaming_url = rest.instance
@@ -112,7 +112,8 @@ class CrossPoster
   def crosspost toot
     content = Decoder.decode(toot.content
                                .gsub(/(<\/p><p>|<br\s*\/?>)/, "\n")
-                               .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, ''))
+                               .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, '')
+                               .gsub(/@.+?(@.+?)?\s/, ''))
     
     return if not @filter.nil? and content =~ @filter
     return if content.empty? and toot.media_attachments.size.zero?
@@ -170,13 +171,14 @@ class CrossPoster
             save_ids
 
           when Mastodon::Status
-            next unless post.account.acct == @masto_user
+            next unless post.account.acct == @masto_user.acct
             next unless post.visibility =~ @privacy
-            next unless post.mentions.size.zero?
+            next unless post.mentions.size.zero? or
+              post.attributes['in_reply_to_account_id'] == @masto_user.id
             
             if post.attributes['reblog'].nil?
               crosspost post
-            elsif post.attributes['reblog']['account']['acct'] == @masto_user and
+            elsif post.attributes['reblog']['account']['acct'] == @masto_user.acct and
                  @ids.has_key?(post.attributes['reblog']['id'])
               @twitter.retweet @ids[post.attributes['reblog']['id']]
             end
