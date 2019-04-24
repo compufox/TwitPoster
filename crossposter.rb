@@ -161,7 +161,6 @@ class CrossPoster
     loop do
       begin
         @mastodon.user do |post|
-          
           case post
           when Mastodon::Streaming::DeletedStatus
             id = post.id.to_s
@@ -177,11 +176,13 @@ class CrossPoster
             
             if post.attributes['reblog'].nil?
               crosspost post
+            elsif post.attributes['reblog']['account']['acct'] == @masto_user and
+                 @ids.has_key?(post.attributes['reblog']['id'])
+              @twitter.retweet @ids[post.attributes['reblog']['id']]
             end
           end
-          
-        rescue
         end
+      rescue
       end
     end
   end
