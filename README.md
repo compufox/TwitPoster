@@ -7,6 +7,7 @@
 - splits up long post from mastodon into a twitter thread
 - optional filter to selectively crosspost 
 - specify lowest level of privacy to crosspost (see config.yml.example for more detail)
+- mirrors posted media from mastodon to twitter
 
 ## Quickstart
 
@@ -18,7 +19,7 @@ Copy the example config and edit it to have your tokens for Twitter and Mastodon
 
 `$ cp config.yml.example config.yml`
 
-Run the script!
+Run the executable!
 
-`$ bundle exec ruby main.rb`
+`$ bin/crosspost`
 
