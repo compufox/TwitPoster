@@ -9,6 +9,7 @@ class CrossPoster
   Levels = ['public', 'unlisted', 'private', 'direct']
   Decoder = HTMLEntities.new
   MaxRetries = 10
+  ValidMediaTypes = [ '.png', '.gif', '.mp4', '.jpeg' ]
 
   attr :filter,
        :privacy,
@@ -71,8 +72,11 @@ class CrossPoster
   def download_media post
     files = []
     post.media_attachments.each_with_index do |img, i|
-      files << "#{i}#{File.extname(img.url).split('?').first}"
-      File.write(files[i], Net::HTTP.get(URI.parse(img.url)))
+      extension = File.extname(img.url).split('?').first
+      if ValidMediaTypes.include? extension
+        files << "#{i}#{extension}"
+        File.write(files[i], Net::HTTP.get(URI.parse(img.url)))
+      end
     end
     files
   end
