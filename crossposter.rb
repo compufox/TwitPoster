@@ -15,7 +15,8 @@ class CrossPoster
        :ids,
        :twitter,
        :mastodon,
-       :masto_user
+       :masto_user,
+       :max_ids
 
   def initialize
     raise 'No config file found' unless File.exists?(ARGV.first || 'config.yml')
@@ -27,8 +28,11 @@ class CrossPoster
     level  = Levels.index(app_conf[:privacy_level]) || 0
     @privacy = /#{Levels[0..level].join('|')}/
 
+    @max_ids = app_conf[:max_ids] || 200
+    
     @ids = (File.exists?('id_store.yml') ? YAML.load_file('id_store.yml') : {})
 
+    # set up the twitter client
     @twitter = Twitter::REST::Client.new do |config|
       config.consumer_key = app_conf[:twitter_consumer_key]
       config.consumer_secret = app_conf[:twitter_consumer_secret]
@@ -80,7 +84,7 @@ class CrossPoster
 
   # keeps the most recent 200 ids
   def cull_old_ids
-    saved_ids = @ids.keys.reverse.take(200)
+    saved_ids = @ids.keys.reverse.take(@max_ids)
     @ids.select! do |k, v|
       saved_ids.include? k
     end
@@ -103,64 +107,81 @@ class CrossPoster
     return line.strip, words.join(' ')
   end
 
+  # posts a mastodon status to twitter
+  # @param toot [Mastodon::Status]
+  def crosspost toot
+    content = Decoder.decode(toot.content
+                               .gsub(/(<\/p><p>|<br\s*\/?>)/, "\n")
+                               .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, ''))
+    
+    return if not @filter.nil? and content =~ @filter
+    return if content.empty? and toot.media_attachments.size.zero?
+    
+    content = "cw: #{toot.spoiler_text}\n\n#{content}" if not toot.spoiler_text.empty?
+    
+    uploaded_media = false
+    
+    @retries = 0
+    while not content.empty? or not uploaded_media
+      trimmed, content = trim_post content
+      
+      while @retries < MaxRetries
+        begin
+          if toot.media_attachments.size.zero? or uploaded_media
+            tweet = @twitter.update(trimmed,
+                                    in_reply_to_status_id: @ids[toot.in_reply_to_id])
+          else
+            media = download_media toot
+            tweet = @twitter.update_with_media(trimmed,
+                                               media,
+                                               in_reply_to_status_id: @ids[toot.in_reply_to_id])
+            
+            media.each do |file|
+              File.delete(file)
+            end
+            uploaded_media = true
+          end
+          
+          break
+        rescue Twitter::Error
+          @retries += 1
+        end
+      end
+      
+      break if @retries >= MaxRetries
+      
+      @ids[toot.id] = tweet.id
+      cull_old_ids
+      save_ids
+    end
+  end
+
   # Run the crossposter
   def run
     loop do
       begin
         @mastodon.user do |post|
-          next unless post.kind_of? Mastodon::Status
-          next unless post.account.acct == @masto_user
-          next unless post.visibility =~ @privacy
-          next unless post.attributes['reblog'].nil?
-          next if not post.mentions.size.zero?
           
-          content = Decoder.decode(post.content
-                                     .gsub(/(<\/p><p>|<br\s*\/?>)/, "\n")
-                                     .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, ''))
-
-          next if not @filter.nil? and content =~ @filter
-          next if content.empty? and post.media_attachments.size.zero?
-          
-          content = "cw: #{post.spoiler_text}\n\n#{content}" if not post.spoiler_text.empty?
-          
-          uploaded_media = false
-
-          @retries = 0
-          while not content.empty? or not uploaded_media
-            trimmed, content = trim_post content
-            
-            while @retries < MaxRetries
-              begin
-                if post.media_attachments.size.zero? or uploaded_media
-                  tweet = @twitter.update(trimmed,
-                                          in_reply_to_status_id: @ids[post.in_reply_to_id])
-                else
-                  media = download_media post
-                  tweet = @twitter.update_with_media(trimmed,
-                                                     media,
-                                                     in_reply_to_status_id: @ids[post.in_reply_to_id])
-                  
-                  media.each do |file|
-                    File.delete(file)
-                  end
-                  uploaded_media = true
-                end
-                
-                break
-              rescue Twitter::Error
-                @retries += 1
-              end
+          case post
+          when Mastodon::Streaming::DeletedStatus
+            id = post.id.to_s
+            if @ids.has_key? id
+              @twitter.destroy_status @ids.delete id
             end
-
-            break if @retries >= MaxRetries
-            
-            @ids[post.id] = tweet.id
-            cull_old_ids
             save_ids
+
+          when Mastodon::Status
+            next unless post.account.acct == @masto_user
+            next unless post.visibility =~ @privacy
+            next unless post.mentions.size.zero?
+            
+            if post.attributes['reblog'].nil?
+              crosspost post
+            end
           end
+          
+        rescue
         end
-        
-      rescue
       end
     end
   end

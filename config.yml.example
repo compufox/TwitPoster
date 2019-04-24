@@ -22,3 +22,8 @@
 # e.g. 'unlisted' will crosspost 'public' and 'unlisted'
 #      'private' will crosspost 'public', 'unlisted', and 'private'
 :privacy_level: public
+
+# the crossposter saves post IDs in the background so 
+#  we can keep track of replies
+# set this number to manually set the amount of saved ids
+:max_ids: 200
