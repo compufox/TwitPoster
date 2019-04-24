@@ -54,7 +54,7 @@ end
 def trim_post content
   line = ''
   counter = 1
-  words = content.split
+  words = content.split(/ /)
 
   # we break before 280 just in case we go over
   while not words.empty? and not too_long?(line)
@@ -73,12 +73,10 @@ Masto.user do |post|
   next if not post.mentions.size.zero?
 
   content = Decoder.decode(post.content
-                             .gsub(/(<\/p><p>|^<br\s*\/?>$)/, "\n")
+                             .gsub(/(<\/p><p>|<br\s*\/?>)/, "\n")
                              .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, ''))
   
-  content = "cw: #{post.spoiler_text}
-
-  #{content}" if not post.spoiler_text.empty?
+  content = "cw: #{post.spoiler_text}\n\n#{content}" if not post.spoiler_text.empty?
 
   next if content =~ filter
   
