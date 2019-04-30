@@ -1,1 +1,1 @@
-ruby crosspost
+ruby crosspost %*

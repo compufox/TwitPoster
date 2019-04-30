@@ -98,7 +98,7 @@ class CrossPoster
   # Trims the post content down
   #  returns the current post along with the rest of the supplied words
   # @param content [String]
-  # @return [Array<String>] 
+  # @return [Array<String, Array<String>>] 
   def trim_post content
     line = ''
     counter = 1
@@ -117,7 +117,8 @@ class CrossPoster
   def crosspost toot
     content = Decoder.decode(toot.content
                                .gsub(/(<\/p><p>|<br\s*\/?>)/, "\n")
-                               .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, ''))
+                               .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, '')
+                               .gsub('*', '＊'))
     toot.mentions.each {|ment| content.gsub!("@#{ment.acct}", '')} if !toot.mentions.size.zero?
     
     return if not @filter.nil? and content =~ @filter
@@ -160,7 +161,6 @@ class CrossPoster
       
       break if @retries >= MaxRetries or tweet.nil?
 
-      @ids[toot.in_reply_to_id] = tweet.id if toot.in_reply_to_id
       @ids[toot.id] = tweet.id 
       cull_old_ids
       save_ids
