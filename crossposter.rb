@@ -1,3 +1,4 @@
+# coding: utf-8
 require 'yaml'
 require 'moostodon'
 require 'twitter'
@@ -129,22 +130,23 @@ class CrossPoster
     uploaded_media = false
     
     @retries = 0
+    thread_ids = []
     while not content.empty? or
          (not toot.media_attachments.size.zero? and not uploaded_media)
       trimmed, content = trim_post(content)
       tweet = nil
+      reply_id = thread_ids.last || @ids[toot.in_reply_to_id]
       
       while @retries < MaxRetries and tweet.nil?
         begin
           if toot.media_attachments.size.zero? or uploaded_media
-            
             tweet = @twitter.update(trimmed,
-                                    in_reply_to_status_id: @ids[toot.in_reply_to_id])
+                                    in_reply_to_status_id: reply_id)
           else
             media = download_media toot
             tweet = @twitter.update_with_media(trimmed,
                                                media,
-                                               in_reply_to_status_id: @ids[toot.in_reply_to_id])
+                                               in_reply_to_status_id: reply_id)
             
             media.each do |file|
               File.delete(file)
@@ -161,6 +163,7 @@ class CrossPoster
       
       break if @retries >= MaxRetries or tweet.nil?
 
+      thread_ids << tweet.id
       @ids[toot.id] = tweet.id 
       cull_old_ids
       save_ids
