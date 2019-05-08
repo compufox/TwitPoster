@@ -120,7 +120,13 @@ class CrossPoster
                                .gsub(/(<\/p><p>|<br\s*\/?>)/, "\n")
                                .gsub(/<("[^"]*"|'[^']*'|[^'">])*>/, '')
                                .gsub('*', '＊'))
-    toot.mentions.each {|ment| content.gsub!("@#{ment.acct}", '')} if !toot.mentions.size.zero?
+    
+    # replaces any mention in the post with the account's URL
+    if !toot.mentions.size.zero?
+      toot.mentions.each do |ment|
+        content.gsub!("@#{ment.acct}", ment.url)
+      end
+    end
     
     return if not @filter.nil? and content =~ @filter
     return if content.empty? and toot.media_attachments.size.zero?
