@@ -10,7 +10,8 @@ class CrossPoster
   Levels = ['public', 'unlisted', 'private', 'direct']
   Decoder = HTMLEntities.new
   MaxRetries = 10
-  ValidMediaTypes = [ '.png', '.gif', '.mp4', '.jpeg' ]
+  MaxTweetLength = 250
+  ValidMediaTypes = [ '.png', '.gif', '.mp4', '.jpg', '.jpeg' ]
 
   attr :filter,
        :privacy,
@@ -18,7 +19,8 @@ class CrossPoster
        :twitter,
        :mastodon,
        :masto_user,
-       :max_ids
+       :max_ids,
+       :crosspost_mentions
 
   def initialize
     raise 'No config file found' unless File.exists?(ARGV.first || 'config.yml')
@@ -31,6 +33,8 @@ class CrossPoster
     @privacy = /#{Levels[0..level].join('|')}/
 
     @max_ids = app_conf[:max_ids] || 200
+    
+    @crosspost_mentions = app_conf[:crosspost_mentions] || false
     
     @ids = (File.exists?('id_store.yml') ? YAML.load_file('id_store.yml') : {})
     @ids = {} if @ids.nil?
@@ -65,7 +69,7 @@ class CrossPoster
   # @param content [String]
   # @return [Boolean]
   def too_long? content
-    content.length > 250
+    content.length > MaxTweetLength
   end
   
   # downloads all media attachments from a mastodon post
@@ -122,16 +126,16 @@ class CrossPoster
                                .gsub('*', '＊'))
     
     # replaces any mention in the post with the account's URL
-    if !toot.mentions.size.zero?
+    unless toot.mentions.size.zero?
       toot.mentions.each do |ment|
-        content.gsub!("@#{ment.acct}", ment.url)
+        content.gsub!("@#{ment.acct.split('@').first}", ment.url)
       end
     end
     
     return if not @filter.nil? and content =~ @filter
     return if content.empty? and toot.media_attachments.size.zero?
     
-    content = "cw: #{toot.spoiler_text}\n\n#{content}" if not toot.spoiler_text.empty?
+    content = "cw: #{toot.spoiler_text}\n\n#{content}" unless toot.spoiler_text.empty?
     
     uploaded_media = false
     
@@ -154,16 +158,40 @@ class CrossPoster
                                                media,
                                                in_reply_to_status_id: reply_id)
             
-            media.each do |file|
-              File.delete(file)
-            end
             uploaded_media = true
+          end
+        rescue Twitter::Error::UnprocessableEntity,
+               Twitter::Error::RequestEntityTooLarge,
+               Twitter::Error::BadRequest => err
+          # if we're at the last try to upload media
+          #  we see if we have room to add the link to the
+          #  media, otherwise we tack the links onto the end
+          #  of 'content' so it'll get threaded onto the op
+          # if we're not on the last try we just add 1 and
+          #  print the error out like normal
+          if @retries + 1 >= MaxRetries
+            toot.media_attachments.each do |media|
+              if trimmed.length + media.url.length <= MaxTweetLength
+                trimmed << " #{media.url}"
+              else
+                content << media.url
+              end
+            end
+            
+            # this skips trying to upload the media anymore
+            uploaded_media = true
+          else
+            @retries += 1
+            pp err
           end
         rescue Twitter::Error => err
           @retries += 1
           pp err
         rescue StandardError => err
           pp err
+        ensure
+          # make sure we clean up any downloaded files
+          media.each {|file| File.delete(file)} unless media.nil? or media.empty?
         end
       end
       
@@ -178,6 +206,8 @@ class CrossPoster
 
   # Run the crossposter
   def run
+    # TODO: put this in a separate thread?
+    # TODO: implement a simple queue system
     loop do
       begin
         @mastodon.user do |post|
@@ -192,8 +222,10 @@ class CrossPoster
           when Mastodon::Status
             next unless post.account.acct == @masto_user.acct
             next unless post.visibility =~ @privacy
-            next unless post.mentions.size.zero? or
-              post.in_reply_to_account_id == @masto_user.id
+            next unless (post.in_reply_to_account_id.nil? or
+                         post.in_reply_to_account_id == @masto_user.id)
+            next if (not post.mentions.size.zero?) and
+              @crosspost_mentions
 
             if post.attributes['reblog'].nil?
               crosspost post

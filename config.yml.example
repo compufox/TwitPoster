@@ -27,3 +27,10 @@
 #  we can keep track of replies
 # set this number to manually set the amount of saved ids
 :max_ids: 200
+
+# if you make a toot that is not a reply, but has a mention
+#  setting this to true will sub out the mention for a link
+#  to the user's account and then crosspost it
+#         ******************NOTE******************
+#  please be respectful of other's privacy when using this option<3
+:crosspost_mentions: false
