@@ -153,11 +153,15 @@ class CrossPoster
             tweet = @twitter.update(trimmed,
                                     in_reply_to_status_id: reply_id)
           else
-            media = download_media toot
+            media = download_media(toot).collect do |file|
+              file.end_with?('.mp4') ?
+                               File.open(file, 'r') :
+                               file
+            end
             tweet = @twitter.update_with_media(trimmed,
                                                media,
                                                in_reply_to_status_id: reply_id)
-            
+
             uploaded_media = true
           end
         rescue Twitter::Error::UnprocessableEntity,
@@ -191,7 +195,12 @@ class CrossPoster
           pp err
         ensure
           # make sure we clean up any downloaded files
-          media.each {|file| File.delete(file)} unless media.nil? or media.empty?
+          unless media.nil? or media.empty?
+            media.each do |file|
+              file.close if File.basename(file).end_with? '.mp4'
+              File.delete(file)
+            end
+          end
         end
       end
       
