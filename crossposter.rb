@@ -10,7 +10,7 @@ class CrossPoster
   Levels = ['public', 'unlisted', 'private', 'direct']
   Decoder = HTMLEntities.new
   MaxRetries = 10
-  MaxTweetLength = 250
+  MaxTweetLength = 280
   ValidMediaTypes = [ '.png', '.gif', '.mp4', '.jpg', '.jpeg' ]
 
   attr :filter,
