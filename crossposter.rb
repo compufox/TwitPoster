@@ -10,7 +10,7 @@ class CrossPoster
   Levels = ['public', 'unlisted', 'private', 'direct']
   Decoder = HTMLEntities.new
   MaxRetries = 10
-  MaxTweetLength = 280
+  MaxTweetLength = 274
   ValidMediaTypes = [ '.png', '.gif', '.mp4', '.jpg', '.jpeg' ]
 
   attr :filter,
@@ -19,6 +19,7 @@ class CrossPoster
        :twitter,
        :mastodon,
        :masto_user,
+       :masto_rest,
        :max_ids,
        :crosspost_mentions
 
@@ -52,17 +53,19 @@ class CrossPoster
     mastodon_token = app_conf[:mastodon_token]
 
     # use the mastodon rest client to get some data about our user
-    rest = Mastodon::REST::Client.new(bearer_token: mastodon_token,
-                                      base_url: mastodon_url)
+    @masto_rest = Mastodon::REST::Client.new(bearer_token: mastodon_token,
+                                             base_url: mastodon_url)
     # get our authed account
-    @masto_user = rest.verify_credentials
+    @masto_user = @masto_rest.verify_credentials
 
     # make sure we have the correct url for the streaming interface
-    streaming_url = rest.instance
-                      .attributes['urls']['streaming_api']
-                      .gsub(/^wss?/, 'https')
+    streaming_url = @masto_rest.instance
+                               .attributes['urls']['streaming_api']
+                               .gsub(/^wss?/, 'https')
     @mastodon = Mastodon::Streaming::Client.new(bearer_token: mastodon_token,
                                                 base_url: streaming_url)
+
+    puts "Initialized!"
   end
 
   # Checks if the post content is too long
@@ -109,7 +112,7 @@ class CrossPoster
     counter = 1
     words = content.split(/ /)
     
-    # we break before 280 (@250) just in case we go over
+    # we break before 272 leaving space for cw and break in case it's needed
     while not words.empty? and not too_long?(line)
       line += " #{words.shift}"
     end
@@ -134,8 +137,13 @@ class CrossPoster
     
     return if not @filter.nil? and content =~ @filter
     return if content.empty? and toot.media_attachments.size.zero?
+
+    parent_toot = @masto_rest.status(toot.in_reply_to_id) unless toot.in_reply_to_id.nil?
+
+    old_cw = parent_toot.spoiler_text unless parent_toot.nil?
+    cw = toot.spoiler_text unless toot.spoiler_text.empty? or toot.spoiler_text == old_cw
     
-    content = "cw: #{toot.spoiler_text}\n\n#{content}" unless toot.spoiler_text.empty?
+    content = "cw: #{cw}\n\n#{content}" unless cw.nil?
     
     uploaded_media = false
     
@@ -144,9 +152,12 @@ class CrossPoster
     while not content.empty? or
          (not toot.media_attachments.size.zero? and not uploaded_media)
       trimmed, content = trim_post(content)
+      trimmed += "…" unless content.empty?
       tweet = nil
       reply_id = thread_ids.last || @ids[toot.in_reply_to_id]
       
+      puts "attempting to tweet " + trimmed.length.to_s + " chars"
+
       while @retries < MaxRetries and tweet.nil?
         begin
           if toot.media_attachments.size.zero? or uploaded_media
